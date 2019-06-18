@@ -2,6 +2,9 @@ package mapreduce
 
 import (
 	"hash/fnv"
+	"io/ioutil"
+	"os"
+	"encoding/json"
 )
 
 func doMap(
@@ -53,10 +56,53 @@ func doMap(
 	//
 	// Your code here (Part I).
 	//
+
+	// 读文件
+	mapFile, fileError := ioutil.ReadFile(inFile)
+	if fileError != nil {
+		panic(fileError)
+	}
+
+	// 调用自定义map函数
+	kvs := mapF(inFile, string(mapFile))
+
+	// 初始化r / value list pair
+	resultMap := map[int][]KeyValue{}
+
+	// 获取对应的r
+	for _, kv := range kvs {
+		// hash结果执行mod nReduce
+		r := ihash(kv.Key) % nReduce
+		if _, ok := resultMap[r];!ok {
+			resultMap[r] = []KeyValue{}
+		}
+
+		resultMap[r] = append(resultMap[r], kv)
+	}
+
+	// 输出中间文件
+	for r, kvList := range resultMap{
+		// 获取中间文件名
+		intermediateFileName := reduceName(jobName, mapTask, r)
+		// 编码json
+		f, err := os.Create(intermediateFileName)
+		if err != nil {
+			panic(err)
+		}
+		defer f.Close()
+		encoder := json.NewEncoder(f)
+		err = encoder.Encode(kvList)
+		if err != nil {
+			panic(err)
+		}
+	}
 }
 
 func ihash(s string) int {
+	// fnv hash算法
+	// FNV能快速hash大量数据并保持较小的冲突率，它的高度分散使它适用于hash一些非常相近的字符串，比如URL，hostname，文件名，text，IP地址等。
 	h := fnv.New32a()
 	h.Write([]byte(s))
+	// 0x7fffffff 为32位最大正整数，hash值与其做与运算代表将hash值取正
 	return int(h.Sum32() & 0x7fffffff)
 }

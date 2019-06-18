@@ -1,5 +1,11 @@
 package mapreduce
 
+import (
+	"os"
+	"encoding/json"
+	"fmt"
+)
+
 func doReduce(
 	jobName string, // the name of the whole MapReduce job
 	reduceTask int, // which reduce task this is
@@ -44,4 +50,58 @@ func doReduce(
 	//
 	// Your code here (Part I).
 	//
+
+	// Reduce处理的数据
+	reduceMap := map[string][]string{}
+
+	// 读取临时文件
+	for i:=0; i<=nMap; i++ {
+		// 获取临时文件
+		intermediateFileName := reduceName(jobName, i, reduceTask)
+		fmt.Println(intermediateFileName)
+		f, err := os.Open(intermediateFileName)
+		if err != nil {
+			//panic(err)
+			continue
+		}
+		defer f.Close()
+
+		insList := []KeyValue{}
+		decoder := json.NewDecoder(f)
+		decoder.Decode(&insList)
+
+		fmt.Println(intermediateFileName)
+
+		for _, ins := range insList {
+			if _, ok := reduceMap[ins.Key]; !ok {
+				reduceMap[ins.Key] = []string{}
+			}
+
+			reduceMap[ins.Key] = append(reduceMap[ins.Key], ins.Value)
+		}
+	}
+
+	// 输出最终文件
+	f, err := os.OpenFile(outFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC|os.O_APPEND, 0666)
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+
+	// 集中处理数据
+	for key, values := range reduceMap{
+		outputValue := reduceF(key, values)
+		insOut, err := json.Marshal(KeyValue{
+			Key: key,
+			Value: outputValue,
+		})
+
+		if err != nil {
+			panic(err)
+		}
+
+		f.Write(insOut)
+	}
+
+
 }
